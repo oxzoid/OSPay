@@ -5,6 +5,7 @@ A high-performance cryptocurrency payment processor built in Go with React front
 NOTE: only payment verification is in frontend rn will implement dashboiard and other features asap. the apis are working just not implemented in frontend
 #
 ONLY FOR EDUCATIONAL AND LEANRING PURPOSES,TRYING TO GET FINTECH RECRUITERS TO NOTICE ME
+#
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Go](https://img.shields.io/badge/go-1.21+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
