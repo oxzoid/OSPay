@@ -90,6 +90,7 @@ func main() {
 	mux.HandleFunc("/orders", api.APIKeyAuthMiddleware(api.CreateOrderHandler))
 	mux.HandleFunc("/orders/get", api.APIKeyAuthMiddleware(api.GetOrderHandler))
 	mux.HandleFunc("/orders/refund", api.APIKeyAuthMiddleware(api.RefundHandler))
+	mux.HandleFunc("/reconciliation", api.APIKeyAuthMiddleware(api.ReconciliationHandler))
 	mux.HandleFunc("/events/payment-detected", api.APIKeyAuthMiddleware(api.PaymentDetectedHandler))
 	mux.HandleFunc("/debug/metrics", api.DebugMetricsHandler)
 	mux.HandleFunc("/merchants", api.CreateMerchantHandler)
