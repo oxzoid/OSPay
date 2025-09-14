@@ -146,7 +146,6 @@ func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 
-	// For real testing: use merchant's actual wallet address as deposit address
 	var merchantWalletAddress string
 	err = db.QueryRowContext(ctx, `SELECT merchant_wallet_address FROM merchants WHERE id = ?`, req.MerchantID).Scan(&merchantWalletAddress)
 	if err != nil {
@@ -154,7 +153,7 @@ func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deposit := merchantWalletAddress // Use real merchant wallet instead of fake address
+	deposit := merchantWalletAddress
 	status := "PENDING"
 	now := time.Now().UTC().Format(time.RFC3339)
 
