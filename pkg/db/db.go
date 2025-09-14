@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS orders (
   customer_wallet_address TEXT,
   order_idempotency_key TEXT UNIQUE,
   refund_idempotency_key TEXT UNIQUE,
-  tx_hash TEXT,
+  tx_hash TEXT UNIQUE,
   confirmed_block INTEGER,
   paid_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
