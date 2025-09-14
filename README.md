@@ -1,192 +1,223 @@
-# OSPay Crypto Payment Processor
+# Crypto Payment Processor
 
-High-throughput, minimal crypto payment processor written in Go. Supports USDT verification on BSC, idempotent order/refund flows, double-entry ledger, async verification workers, and simple ops/metrics for observability.
+A high-performance cryptocurrency payment processor built in Go with React frontend. Supports real-time payment verification on multiple blockchain networks with automatic settlement and comprehensive transaction management.
+NOTE: only payment verification is in frontend rn will implement dashboiard and other features asap. the apis are working just not implemented in frontend
+![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Go](https://img.shields.io/badge/go-1.21+-blue.svg)
+![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 
+##  Features
 
-NOTE: The frontend only verfied transactions rn will implement refunds and merchnat dashboards soon.
+- **Chain Support**: BSC,others are placeholders for now
+- **Real-Time Verification**: Automatic blockchain transaction verification
+- **Payment Processing**: Complete order lifecycle (PENDING → PAID → SETTLED)
+- **QR Code Payments**: Generate payment QR codes for mobile wallets
+- **Auto Settlement**: Background settlement with configurable delays
+- **Double-Entry Ledger**: Proper accounting with merchant and clearing buckets
+- **API-First Design**: RESTful APIs with Swagger documentation
+- **Idempotent Operations**: Safe retry mechanisms and duplicate prevention
+- **Production Ready**: Comprehensive error handling, logging, and monitoring
 
-## Features
+##  Quick Start
 
-- Create and query orders (PENDING → PAID → SETTLED/REFUNDED)
-- Payment detection with on-chain USDT transfer verification (BSC)
-- Idempotent updates and guarded state transitions
-- Double-entry ledger (merchant and clearing buckets)
-- Refunds with ledger entries and state enforcement
-- Background verification workers and scheduler for settlements
-- API key auth (per-merchant) and structured error responses
-- SQLite with WAL + tuned pool; timeouts around DB and RPC
-- Lightweight metrics at `/debug/metrics`
+### Prerequisites
 
-## Project layout
+- Go 
+- Node.js
+- Git
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/crypto-payment-processor.git
+   cd crypto-payment-processor
+   ```
+
+2. **Start the development environment**
+   ```bash
+   # On Windows
+   start-dev.bat
+   
+   # On macOS/Linux
+   ./start-dev.sh
+   ```
+
+3. **Access the application**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:8080
+   - Swagger Docs: http://localhost:8080/swagger/
+
+##  Architecture
 
 ```
-cmd/server/main.go       # HTTP server, routes, workers, scheduler
-pkg/api/orders.go        # Create/Get order endpoints, API key middleware
-pkg/api/events.go        # Payment detection, reconciliation, metrics, workers, scheduler
-pkg/api/refunds.go       # Refund endpoint
-pkg/blockchain/bsc.go    # BSC RPC client and USDT verification
-pkg/db/db.go             # DB open, PRAGMAs, migrations
-pkg/db/migrations.sql    # Schema (orders, merchants, ledger, refunds)
+├── cmd/server/          # HTTP server and application entry point
+├── pkg/
+│   ├── api/            # REST API handlers and middleware
+│   ├── blockchain/     # Blockchain integration (BSC, ETH, TRON)
+│   └── db/             # Database layer and migrations
+├── frontend/           # React TypeScript frontend
+└── docs/              # API documentation (Swagger)
 ```
 
-## Quick start
+##  API Documentation
 
-1) Build
+### Authentication
 
-```powershell
-go build ./...
+All API endpoints require the `X-API-Key` header for merchant authentication.
+
+### Core Endpoints
+
+#### Create Order
+```http
+POST /orders
+Content-Type: application/json
+X-API-Key: your-merchant-api-key
+
+{
+  "id": "order_123",
+  "merchant_id": "merchant_abc",
+  "asset": "USDT",
+  "chain": "BSC",
+  "amount_minor": 1000000
+}
 ```
 
-2) Run the server
+#### Payment Detection
+```http
+POST /events/payment-detected
+Content-Type: application/json
 
-```powershell
+{
+  "order_id": "order_123",
+  "tx_hash": "0xabc123..."
+}
+```
+
+#### Get Order Status
+```http
+GET /orders/get?id=order_123
+X-API-Key: your-merchant-api-key
+```
+
+For complete API documentation, visit `/swagger/` when running the server.
+
+## 🔧 Configuration
+
+### Environment Variables
+
+```bash
+# Backend Configuration
+BSC_RPC_URL=https://bsc-dataseed.binance.org/
+DATABASE_URL=file:ospay.db?_pragma=busy_timeout=5000
+
+# Frontend Configuration (optional)
+VITE_API_BASE=http://localhost:8080
+```
+
+### Database
+
+The application uses SQLite with optimized settings:
+- WAL mode for better concurrency
+- Foreign key constraints enabled
+- Automatic schema migrations
+
+## 🔐 Supported Networks
+
+| Network | Asset | Contract Address | Status |
+|---------|-------|------------------|--------|
+| BSC | BSC-USD | `0x55d398326f99059fF775485246999027B3197955` | ✅ Verified |
+| Ethereum | USDT | `0xdAC17F958D2ee523a2206206994597C13D831ec7` | 🔄 Testing/not supported rn|
+| TRON | USDT | `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t` | 🔄 Testing/not supported rn |
+
+## 🛡️ Security Features
+
+- **API Key Authentication**: Secure merchant identification
+- **Input Validation**: Comprehensive request validation
+- **Idempotent Operations**: Safe retry mechanisms
+- **Transaction Verification**: On-chain payment verification
+- **Rate Limiting**: Protection against abuse
+- **Secure Headers**: CORS and security headers configured
+
+## 📊 Monitoring & Observability
+
+### Metrics Endpoint
+```http
+GET /debug/metrics
+```
+
+Returns operational metrics including:
+- Total orders created
+- Payments processed
+- Refunds completed
+- System health status
+
+### Health Check
+```http
+GET /health
+```
+
+## 🔄 Payment Flow
+
+1. **Order Creation**: Merchant creates order with amount and asset
+2. **QR Generation**: System generates payment QR code
+3. **Customer Payment**: Customer scans QR and sends payment
+4. **Detection**: System detects payment via webhook or polling
+5. **Verification**: Blockchain verification confirms payment
+6. **Settlement**: Automatic settlement after confirmation period
+7. **Reconciliation**: Double-entry ledger maintains balance
+
+## 🛠️ Development
+
+### Running Tests
+```bash
+go test ./...
+```
+
+### Building for Production
+```bash
+# Backend
+go build -o server ./cmd/server
+
+# Frontend
+cd frontend
+npm run build
+```
+
+### Database Migrations
+```bash
+# Migrations are automatically applied on startup
+# Manual application:
 go run ./cmd/server
 ```
 
-By default, the server will create `ospay.db` (SQLite) in the working directory and apply migrations. The server registers workers (default from `StartVerificationWorkers(4)`) and a periodic settlement scheduler.
+##  Scaling Considerations for future
 
-## Configuration
+- **Database**: Consider PostgreSQL for high-throughput scenarios
+- **Caching**: Redis integration for improved performance
+- **Queue System**: External job queue for high-volume processing
+- **Load Balancing**: Multiple server instances with shared database
+- **Monitoring**: Prometheus/Grafana integration available
 
-Environment variables (optional):
+##  Troubleshooting
 
-- `BSC_RPC_URL`: HTTPS RPC endpoint for Binance Smart Chain. Required for on-chain verification. Example: `https://bsc-dataseed.binance.org`.
+### Common Issues
 
-SQLite is tuned with WAL, synchronous=NORMAL, and busy timeouts. See `pkg/db/db.go`.
+**Build Errors**
+```bash
+go mod tidy
+go mod download
+```
 
-## API overview
+## 📄 License
 
-All endpoints expect and return JSON. Some endpoints require the `X-API-Key` header for merchant authentication.
+This project is licensed under  GNU AFFERO GENERAL PUBLIC LICENSE- see the [LICENSE](LICENSE.MD) file for details.
 
-### Create order
+For questions and support:
+- Create an issue on GitHub
+- Check the [API documentation](/swagger/)
+- Review the troubleshooting section above
 
-- Method/Path: `POST /orders`
-- Auth: `X-API-Key: <merchant-api-key>`
-- Body:
-	```json
-	{
-		"id": "ord_123",                   // your order id (idempotent)
-		"merchant_id": "mrc_abc",         // merchant id
-		"asset": "USDT",                  // asset symbol
-		"amount_minor": 5000000,            // integer minor units (e.g., 6 decimals for USDT)
-		"customer_wallet_address": "0x..." // optional; recorded for your reference
-	}
-	```
-- Response: 201 Created with the order payload including a deposit/destination wallet (merchant wallet).
+---
 
-### Get order
-
-- Method/Path: `GET /orders/get?id=ord_123`
-- Auth: `X-API-Key: <merchant-api-key>`
-- Response: 200 OK with order JSON.
-
-### Payment detected (async)
-
-- Method/Path: `POST /events/payment-detected`
-- Body:
-	```json
-	{ "order_id": "ord_123", "tx_hash": "0xabc..." }
-	```
-- Behavior:
-	- Enqueues a verification job and returns `202 Accepted` with `{ status: "PENDING" }` if queue capacity is available.
-	- If the queue is full, falls back to inline verification before returning.
-	- On success, the order transitions to `PAID`, and balanced ledger entries are written.
-	- Duplicate `tx_hash` within a short window is deduped.
-
-### Refund
-
-- Method/Path: `POST /orders/refund`
-- Auth: `X-API-Key: <merchant-api-key>`
-- Body:
-	```json
-	{ "order_id": "ord_123", "refund_id": "rfd_001", "reason": "customer request" }
-	```
-- Behavior:
-	- Idempotent on `refund_id`.
-	- Writes ledger entries to reverse funds and marks order as `REFUNDED` (guarded by preconditions).
-
-### Reconciliation
-
-- Method/Path: `GET /reconciliation?merchant_id=mrc_abc&asset=USDT`
-- Response:
-	```json
-	{
-		"merchant_id": "mrc_abc",
-		"asset": "USDT",
-		"merchant_balance_minor": 5000000,
-		"clearing_balance_minor": -5000000,
-		"unsettled_paid_count": 1
-	}
-	```
-
-### Metrics
-
-- Method/Path: `GET /debug/metrics`
-- Response:
-	```json
-	{
-		"orders_created_total": 10,
-		"refunds_processed_total": 2,
-		"payments_detected_total": 7
-	}
-	```
-
-## Data model (simplified)
-
-- `merchants(id, api_key, merchant_wallet_address, ...)`
-- `orders(id, merchant_id, asset, amount_minor, status, tx_hash, paid_at, customer_wallet_address, ...)`
-- `ledger_entries(id, order_id, merchant_id, asset, amount_minor, bucket, direction, event_type, tx_hash, created_at)`
-- `refunds(id, order_id, merchant_id, reason, created_at)`
-
-Buckets: `merchant` (customer funds) and `clearing` (platform counter-bucket). Directions: `credit` or `debit`. State transitions are guarded in SQL updates to ensure idempotency under concurrency.
-
-## How on-chain verification works
-
-For USDT on BSC:
-
-- A single shared `ethclient` is reused (singleton), and calls are throttled by a semaphore.
-- Each verification uses a 10s RPC timeout, validating transfer to the merchant wallet with the expected amount.
-- `PaymentDetected` enqueues a job to workers. The worker verifies on-chain and updates the DB transactionally:
-	- UPDATE order to `PAID` (only if currently `PENDING` or `CONFIRMING`)
-	- INSERT two ledger entries: merchant CREDIT and clearing DEBIT
-	- Mark tx hash as recently seen (dedupe map) and bump metrics
-
-You can add other chains/assets by extending `pkg/blockchain/*` and branching in the handler/worker.
-
-## Operations
-
-- Database: SQLite with WAL and pool tuning. See `pkg/db/db.go` for PRAGMAs and connection limits. Suitable for prototypes and small-to-medium traffic; consider Postgres for higher concurrency.
-- Timeouts: All DB calls in hot paths use `context.WithTimeout` (2–5s). RPC calls use a 10s timeout.
-- Concurrency: RPC and handler-level throttles; background worker pool size is configurable (`StartVerificationWorkers(n)`).
-- Scheduler: Periodically transitions `PAID` orders to `SETTLED` after a delay window. See `StartSettlementScheduler`.
-- Dedupe: In-memory map to avoid reprocessing the same tx hash briefly.
-- Logging: Minimal structured logs via `log.Printf`.
-
-## Scaling notes
-
-- Increase worker count gradually (e.g., 4 → 16) and size the verify semaphore accordingly.
-- Move to Postgres for better concurrent write performance; keep guarded updates and idempotency keys.
-- Externalize the job queue (e.g., Redis, NATS, SQS) if the in-process channel isn’t sufficient.
-- Add rate-limiting per merchant and circuit breaker for RPCs under duress.
-- Consider partitioning ledger tables or indexing by `(merchant_id, asset, created_at)`.
-
-## Security
-
-- API key auth via header `X-API-Key` for merchant endpoints.
-- Validate inputs strictly; current code rejects missing/invalid fields and enforces status transitions.
-- Never trust client-provided amounts for settlement; prefer on-chain verified amounts.
-
-## Local development tips
-
-- Ensure `BSC_RPC_URL` is set when testing on-chain verification.
-- If you see `busy timeout` on SQLite, lower concurrency or increase `busy_timeout` PRAGMA.
-- For Windows PowerShell users, use single-line commands or chain with `;`.
-
-## Troubleshooting
-
-- Build fails due to missing modules: run `go mod tidy`.
-- On-chain verification failing: check `BSC_RPC_URL`, the tx hash, destination wallet, and token decimals; confirm USDT contract and chain.
-- Duplicate payment events: handler/worker paths are idempotent; verify your client isn’t retrying excessively.
-
-## License
-
-Apache-2.0 (or your preferred license). Update if needed.
+**Built with  using Go and React**
