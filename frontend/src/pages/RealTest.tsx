@@ -4,6 +4,23 @@ import QRCode from 'react-qr-code'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
 
+// Helper function to convert decimal amount to 18-decimal wei-style integer
+const toWei = (amount: number): number => {
+  // Use string multiplication to avoid floating point precision issues
+  const amountStr = amount.toString()
+  const [whole, decimal = ''] = amountStr.split('.')
+  const paddedDecimal = (decimal + '000000000000000000').slice(0, 18)
+  return parseInt(whole + paddedDecimal)
+}
+
+// Helper function to convert wei-style integer back to decimal display
+const fromWei = (amountMinor: number): string => {
+  const str = amountMinor.toString().padStart(18, '0')
+  const whole = str.slice(0, -18) || '0'
+  const decimal = str.slice(-18).replace(/0+$/, '') || '0'
+  return decimal === '0' ? whole : `${whole}.${decimal}`
+}
+
 interface Order {
   id: string
   merchant_id: string
@@ -81,7 +98,7 @@ export default function RealTest() {
         },
         body: JSON.stringify({
           merchant_id: merchantData.id,
-          amount_minor: Math.round(amount * 1000000000000000000), // Convert to minor units (18 decimals wei-style)
+          amount_minor: toWei(amount), // Convert to 18 decimals safely
           asset: 'USDT',
           chain: chain,
           idempotency_key: uuidv4()
@@ -100,7 +117,7 @@ export default function RealTest() {
       const tempOrder: Order = {
         id: orderData.order_id,
         merchant_id: merchantData.id,
-        amount_minor: Math.round(amount * 1000000000000000000),
+        amount_minor: toWei(amount),
         asset: 'USDT',
         chain: chain,
         status: orderData.status,
@@ -392,7 +409,7 @@ export default function RealTest() {
               <div>
                 <strong>Amount:</strong>
                 <div style={{ fontSize: 24, color: '#28a745', fontWeight: 'bold' }}>
-                  {(order.amount_minor / 1000000000000000000).toFixed(6)} USDT
+                  {fromWei(order.amount_minor)} USDT
                 </div>
               </div>
               <div>
@@ -445,7 +462,7 @@ export default function RealTest() {
             <div style={{ background: '#fff3cd', padding: 15, borderRadius: 8, border: '1px solid #ffeaa7' }}>
               <strong>⚠️ Important:</strong>
               <ul style={{ margin: '10px 0 0 0', paddingLeft: 20 }}>
-                <li>Send exactly <strong>{(order.amount_minor / 1000000000000000000).toFixed(6)} USDT</strong></li>
+                <li>Send exactly <strong>{fromWei(order.amount_minor)} USDT</strong></li>
                 <li>Use <strong>{order.chain === 'BSC' ? 'BSC (BEP-20)' : order.chain}</strong> network</li>
                 <li>Token: <strong>USDT {order.chain === 'BSC' ? 'BEP-20' : order.chain}</strong></li>
                 <li>Send to the address above (your merchant wallet: {merchant.merchant_wallet_address.substring(0, 8)}...)</li>
@@ -538,7 +555,7 @@ export default function RealTest() {
             <div style={{ marginBottom: 15 }}>
               <strong>Amount Received:</strong> 
               <span style={{ color: '#28a745', fontSize: 20, marginLeft: 10 }}>
-                {(order.amount_minor / 1000000000000000000).toFixed(6)} USDT
+                {fromWei(order.amount_minor)} USDT
               </span>
             </div>
             <div style={{ marginBottom: 15 }}>
