@@ -122,7 +122,7 @@ The application uses SQLite with optimized settings:
 - Foreign key constraints enabled
 - Automatic schema migrations
 
-## 🔐 Supported Networks
+##  Supported Networks
 
 | Network | Asset | Contract Address | Status |
 |---------|-------|------------------|--------|
@@ -130,7 +130,7 @@ The application uses SQLite with optimized settings:
 | Ethereum | USDT | `0xdAC17F958D2ee523a2206206994597C13D831ec7` | 🔄 Testing/not supported rn|
 | TRON | USDT | `TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t` | 🔄 Testing/not supported rn |
 
-## 🛡️ Security Features
+##  Security Features
 
 - **API Key Authentication**: Secure merchant identification
 - **Input Validation**: Comprehensive request validation
@@ -139,7 +139,7 @@ The application uses SQLite with optimized settings:
 - **Rate Limiting**: Protection against abuse
 - **Secure Headers**: CORS and security headers configured
 
-## 📊 Monitoring & Observability
+##  Monitoring & Observability
 
 ### Metrics Endpoint
 ```http
@@ -157,7 +157,7 @@ Returns operational metrics including:
 GET /health
 ```
 
-## 🔄 Payment Flow
+##  Payment Flow
 
 1. **Order Creation**: Merchant creates order with amount and asset
 2. **QR Generation**: System generates payment QR code
@@ -167,7 +167,6 @@ GET /health
 6. **Settlement**: Automatic settlement after confirmation period
 7. **Reconciliation**: Double-entry ledger maintains balance
 
-## 🛠️ Development
 
 ### Running Tests
 ```bash
