@@ -18,9 +18,7 @@ ONLY FOR EDUCATIONAL AND LEARNING PURPOSES,TRYING TO GET FINTECH RECRUITERS TO N
 - **QR Code Payments**: Generate payment QR codes for mobile wallets
 - **Auto Settlement**: Background settlement with configurable delays
 - **Double-Entry Ledger**: Proper accounting with merchant and clearing buckets
-- **API-First Design**: RESTful APIs with Swagger documentation
 - **Idempotent Operations**: Safe retry mechanisms and duplicate prevention
-- **Production Ready**: Comprehensive error handling, logging, and monitoring
 
 ##  Quick Start
 
@@ -40,11 +38,11 @@ ONLY FOR EDUCATIONAL AND LEARNING PURPOSES,TRYING TO GET FINTECH RECRUITERS TO N
 
 2. **Start the development environment**
    ```bash
-   # On Windows
-   start-dev.bat
-   
-   # On macOS/Linux
-   ./start-dev.sh
+   go run ./cmd/server
+   ```
+   ```bash
+   cd frontend
+   npm run dev
    ```
 
 3. **Access the application**
