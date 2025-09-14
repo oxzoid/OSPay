@@ -81,7 +81,7 @@ export default function RealTest() {
         },
         body: JSON.stringify({
           merchant_id: merchantData.id,
-          amount_minor: Math.round(amount * 1000000), // Convert to minor units (6 decimals)
+          amount_minor: Math.round(amount * 1000000000000000000), // Convert to minor units (18 decimals wei-style)
           asset: 'USDT',
           chain: chain,
           idempotency_key: uuidv4()
@@ -100,7 +100,7 @@ export default function RealTest() {
       const tempOrder: Order = {
         id: orderData.order_id,
         merchant_id: merchantData.id,
-        amount_minor: Math.round(amount * 1000000),
+        amount_minor: Math.round(amount * 1000000000000000000),
         asset: 'USDT',
         chain: chain,
         status: orderData.status,
@@ -392,7 +392,7 @@ export default function RealTest() {
               <div>
                 <strong>Amount:</strong>
                 <div style={{ fontSize: 24, color: '#28a745', fontWeight: 'bold' }}>
-                  {(order.amount_minor / 1000000).toFixed(6)} USDT
+                  {(order.amount_minor / 1000000000000000000).toFixed(6)} USDT
                 </div>
               </div>
               <div>
@@ -445,7 +445,7 @@ export default function RealTest() {
             <div style={{ background: '#fff3cd', padding: 15, borderRadius: 8, border: '1px solid #ffeaa7' }}>
               <strong>⚠️ Important:</strong>
               <ul style={{ margin: '10px 0 0 0', paddingLeft: 20 }}>
-                <li>Send exactly <strong>{(order.amount_minor / 1000000).toFixed(6)} USDT</strong></li>
+                <li>Send exactly <strong>{(order.amount_minor / 1000000000000000000).toFixed(6)} USDT</strong></li>
                 <li>Use <strong>{order.chain === 'BSC' ? 'BSC (BEP-20)' : order.chain}</strong> network</li>
                 <li>Token: <strong>USDT {order.chain === 'BSC' ? 'BEP-20' : order.chain}</strong></li>
                 <li>Send to the address above (your merchant wallet: {merchant.merchant_wallet_address.substring(0, 8)}...)</li>
@@ -538,7 +538,7 @@ export default function RealTest() {
             <div style={{ marginBottom: 15 }}>
               <strong>Amount Received:</strong> 
               <span style={{ color: '#28a745', fontSize: 20, marginLeft: 10 }}>
-                {(order.amount_minor / 1000000).toFixed(6)} USDT
+                {(order.amount_minor / 1000000000000000000).toFixed(6)} USDT
               </span>
             </div>
             <div style={{ marginBottom: 15 }}>

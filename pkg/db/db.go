@@ -44,7 +44,7 @@ func EnsureSchema(db *sql.DB) error {
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   merchant_id TEXT NOT NULL,
-  amount_minor INTEGER NOT NULL,
+  amount_minor INTEGER NOT NULL, 
   asset TEXT NOT NULL,
   chain TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -69,7 +69,7 @@ CREATE TABLE IF NOT EXISTS ledger_entries (
   order_id TEXT,
   merchant_id TEXT NOT NULL,
   asset TEXT NOT NULL,
-  amount_minor INTEGER NOT NULL,
+  amount_minor INTEGER NOT NULL,  
   bucket TEXT NOT NULL,      -- 'user' | 'clearing' | 'settlement'
   direction TEXT NOT NULL,   -- 'debit' | 'credit'
   event_type TEXT NOT NULL,  -- 'PAYMENT_CONFIRMED' | 'REFUND' | ...
@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS settlement_batches (
   asset TEXT NOT NULL,
   scheduled_for TEXT NOT NULL,
   status TEXT NOT NULL,            -- 'SCHEDULED' | 'EXECUTED' | 'CANCELLED'
-  total_amount_minor INTEGER NOT NULL,
+  total_amount_minor INTEGER NOT NULL,  -- 18 decimal places (wei-style) for blockchain consistency
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   executed_at TEXT
 );

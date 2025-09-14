@@ -206,10 +206,8 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 		verifySem <- struct{}{}
 		defer func() { <-verifySem }()
 		expectedAmount := big.NewInt(amountMinor)
-		multiplier := big.NewInt(1000000000000)
-		expectedAmount.Mul(expectedAmount, multiplier)
 
-		log.Printf("BSC verification: converting amount from %d (6-decimal) to %s (18-decimal)", amountMinor, expectedAmount.String())
+		log.Printf("BSC verification: using amount %d (18-decimal) directly", amountMinor)
 
 		ok, err := blockchain.VerifyBSCUSDTransfer(req.TxHash, merchantWalletAddress, expectedAmount)
 		if err != nil || !ok {
@@ -423,11 +421,10 @@ func processVerificationJob(job verifyJob) {
 	if strings.ToUpper(asset) == "USDT" && strings.ToUpper(chain) == "BSC" {
 		log.Printf("Starting BSC-USD verification for order %s, tx %s", job.OrderID, job.TxHash)
 		verifySem <- struct{}{}
+		// amount_minor is now stored in 18 decimals (wei-style), matching BSC-USD contract
 		expected := big.NewInt(amountMinor)
-		multiplier := big.NewInt(1000000000000)
-		expected.Mul(expected, multiplier)
 
-		log.Printf("BSC verification: converting amount from %d (6-decimal) to %s (18-decimal)", amountMinor, expected.String())
+		log.Printf("BSC verification: using amount %d (18-decimal) directly", amountMinor)
 
 		ok, err := blockchain.VerifyBSCUSDTransfer(job.TxHash, merchantWalletAddress, expected)
 		<-verifySem
