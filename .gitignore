@@ -1,0 +1,52 @@
+
+# Go build artifacts
+bin/
+*.exe
+*.test
+*.out
+*.log
+*.coverprofile
+*.prof
+*.tmp
+*.swp
+
+vendor/
+
+# SQLite/DB files
+ospay.db
+*.sqlite*
+*.db
+
+frontend/node_modules/
+frontend/.next/
+frontend/.env*
+frontend/dist/
+frontend/build/
+frontend/.turbo/
+
+.vscode/
+.idea/
+*.code-workspace
+
+Thumbs.db
+ehthumbs.db
+.DS_Store
+__pycache__/
+*.bak
+*.orig
+
+# Logs
+logs/
+
+# Misc
+*.env
+*.local
+*.secret
+*.pem
+*.crt
+*.key
+
+ospay.db-shm
+ospay.db-wal
+
+pkg/db/migrations.sql
