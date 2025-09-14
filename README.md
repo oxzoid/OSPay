@@ -38,11 +38,11 @@ ONLY FOR EDUCATIONAL AND LEARNING PURPOSES,TRYING TO GET FINTECH RECRUITERS TO N
 
 2. **Start the development environment**
    ```bash
-   # On Windows
-   start-dev.bat
-   
-   # On macOS/Linux
-   ./start-dev.sh
+   go run ./cmd/server
+   ```
+   ```bash
+   cd frontend
+   npm run dev
    ```
 
 3. **Access the application**
