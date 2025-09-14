@@ -44,9 +44,9 @@ var (
 
 // ----- request/response types -----
 type paymentDetectedReq struct {
-	OrderID     string `json:"order_id"`
-	TxHash      string `json:"tx_hash"`
-	AmountMinor *int64 `json:"amount_minor,omitempty"` // optional override; if nil, use order.amount_minor
+	OrderID     string  `json:"order_id"`
+	TxHash      string  `json:"tx_hash"`
+	AmountMinor *string `json:"amount_minor,omitempty"` // optional override; if nil, use order.amount_minor (string for large numbers)
 }
 
 type paymentDetectedResp struct {
@@ -175,7 +175,7 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		merchantID  string
-		amountMinor int64
+		amountMinor string
 		asset       string
 		status      string
 	)
@@ -205,9 +205,14 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.ToUpper(asset) == "USDT" && strings.Contains(strings.ToLower(asset+"-bsc"), "bsc") {
 		verifySem <- struct{}{}
 		defer func() { <-verifySem }()
-		expectedAmount := big.NewInt(amountMinor)
+		// amount_minor is stored as string for 18 decimals (wei-style), parse to big.Int
+		expectedAmount, ok := new(big.Int).SetString(amountMinor, 10)
+		if !ok {
+			writeErrorJSON(w, http.StatusBadRequest, "invalid_amount", "invalid amount_minor format")
+			return
+		}
 
-		log.Printf("BSC verification: using amount %d (18-decimal) directly", amountMinor)
+		log.Printf("BSC verification: using amount %s (18-decimal) directly", amountMinor)
 
 		ok, err := blockchain.VerifyBSCUSDTransfer(req.TxHash, merchantWalletAddress, expectedAmount)
 		if err != nil || !ok {
@@ -231,7 +236,7 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// optional override amount
-	if req.AmountMinor != nil && *req.AmountMinor > 0 {
+	if req.AmountMinor != nil && isValidAmountString(*req.AmountMinor) {
 		amountMinor = *req.AmountMinor
 	}
 
@@ -396,7 +401,7 @@ func processVerificationJob(job verifyJob) {
 	// Load order basics
 	var (
 		merchantID  string
-		amountMinor int64
+		amountMinor string
 		asset       string
 		chain       string
 		status      string
@@ -405,7 +410,7 @@ func processVerificationJob(job verifyJob) {
 		log.Printf("failed to load order %s: %v", job.OrderID, err)
 		return
 	}
-	log.Printf("Processing verification for order %s: asset=%s, chain=%s, amount=%d", job.OrderID, asset, chain, amountMinor)
+	log.Printf("Processing verification for order %s: asset=%s, chain=%s, amount=%s", job.OrderID, asset, chain, amountMinor)
 
 	// Already processed?
 	if status == "PAID" || status == "SETTLED" || status == "REFUNDED" {
@@ -421,10 +426,15 @@ func processVerificationJob(job verifyJob) {
 	if strings.ToUpper(asset) == "USDT" && strings.ToUpper(chain) == "BSC" {
 		log.Printf("Starting BSC-USD verification for order %s, tx %s", job.OrderID, job.TxHash)
 		verifySem <- struct{}{}
-		// amount_minor is now stored in 18 decimals (wei-style), matching BSC-USD contract
-		expected := big.NewInt(amountMinor)
+		// amount_minor is stored as string for 18 decimals (wei-style), parse to big.Int
+		expected, ok := new(big.Int).SetString(amountMinor, 10)
+		if !ok {
+			log.Printf("invalid amount format for order %s: %s", job.OrderID, amountMinor)
+			<-verifySem
+			return
+		}
 
-		log.Printf("BSC verification: using amount %d (18-decimal) directly", amountMinor)
+		log.Printf("BSC verification: using amount %s (18-decimal) directly", amountMinor)
 
 		ok, err := blockchain.VerifyBSCUSDTransfer(job.TxHash, merchantWalletAddress, expected)
 		<-verifySem

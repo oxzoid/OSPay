@@ -23,11 +23,25 @@ func Init(database *sql.DB) { db = database }
 
 // ---------- helpers (scoped to this file to avoid name clashes) ----------
 
+// isValidAmountString checks if a string represents a valid positive integer
+func isValidAmountString(s string) bool {
+	if s == "" || s == "0" {
+		return false
+	}
+	// Check if string contains only digits
+	for _, char := range s {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 type orderCreateReq struct {
 	MerchantID     string `json:"merchant_id"`
-	AmountMinor    int64  `json:"amount_minor"`
-	Asset          string `json:"asset"` // e.g., "USDC"
-	Chain          string `json:"chain"` // e.g., "polygon-amoy"
+	AmountMinor    string `json:"amount_minor"` // String to handle large 18-decimal numbers
+	Asset          string `json:"asset"`        // e.g., "USDC"
+	Chain          string `json:"chain"`        // e.g., "polygon-amoy"
 	IdempotencyKey string `json:"idempotency_key"`
 }
 
@@ -40,7 +54,7 @@ type orderCreateResp struct {
 type orderGetResp struct {
 	ID             string  `json:"id"`
 	MerchantID     string  `json:"merchant_id"`
-	AmountMinor    int64   `json:"amount_minor"`
+	AmountMinor    string  `json:"amount_minor"` // String to handle large 18-decimal numbers
 	Asset          string  `json:"asset"`
 	Chain          string  `json:"chain"`
 	Status         string  `json:"status"`
@@ -115,7 +129,7 @@ func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
 		writeErrorJSON(w, http.StatusBadRequest, "invalid_json", "invalid JSON body")
 		return
 	}
-	if req.MerchantID == "" || req.AmountMinor <= 0 || req.Asset == "" || req.Chain == "" {
+	if req.MerchantID == "" || !isValidAmountString(req.AmountMinor) || req.Asset == "" || req.Chain == "" {
 		writeErrorJSON(w, http.StatusBadRequest, "missing_fields", "merchant_id, amount_minor (>0), asset, chain are required")
 		return
 	}
@@ -181,7 +195,7 @@ func CreateOrderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("event=order_created order_id=%s merchant_id=%s asset=%s amount_minor=%d status=%s", id, req.MerchantID, req.Asset, req.AmountMinor, status)
+	log.Printf("event=order_created order_id=%s merchant_id=%s asset=%s amount_minor=%s status=%s", id, req.MerchantID, req.Asset, req.AmountMinor, status)
 	ordersCreatedTotal++
 	writeJSONOrders(w, http.StatusOK, orderCreateResp{
 		OrderID:        id,

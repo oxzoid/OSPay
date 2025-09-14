@@ -1,30 +1,29 @@
 import React, { useState, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import QRCode from 'react-qr-code'
+import BigNumber from 'bignumber.js'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8080'
 
 // Helper function to convert decimal amount to 18-decimal wei-style integer
-const toWei = (amount: number): number => {
-  // Use string multiplication to avoid floating point precision issues
-  const amountStr = amount.toString()
-  const [whole, decimal = ''] = amountStr.split('.')
-  const paddedDecimal = (decimal + '000000000000000000').slice(0, 18)
-  return parseInt(whole + paddedDecimal)
+const toWei = (amount: number): string => {
+  const bn = new BigNumber(amount)
+  const weiAmount = bn.multipliedBy(new BigNumber(10).pow(18))
+  console.log(`toWei(${amount}) = ${weiAmount.toString()}`)
+  return weiAmount.toString()
 }
 
 // Helper function to convert wei-style integer back to decimal display
-const fromWei = (amountMinor: number): string => {
-  const str = amountMinor.toString().padStart(18, '0')
-  const whole = str.slice(0, -18) || '0'
-  const decimal = str.slice(-18).replace(/0+$/, '') || '0'
-  return decimal === '0' ? whole : `${whole}.${decimal}`
+const fromWei = (amountMinor: number | string): string => {
+  const bn = new BigNumber(amountMinor.toString())
+  const result = bn.dividedBy(new BigNumber(10).pow(18))
+  return result.toString()
 }
 
 interface Order {
   id: string
   merchant_id: string
-  amount_minor: number
+  amount_minor: number | string  // Can be string for large numbers
   asset: string
   chain: string
   status: string
@@ -54,6 +53,9 @@ export default function RealTest() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [pollingInterval, setPollingInterval] = useState<number | null>(null)
+  const [useExistingOrder, setUseExistingOrder] = useState(false)
+  const [existingOrderId, setExistingOrderId] = useState('')
+  const [existingApiKey, setExistingApiKey] = useState('')
 
   // Form inputs
   const [merchantWallet, setMerchantWallet] = useState('')
@@ -90,19 +92,25 @@ export default function RealTest() {
       setMerchant(merchantData)
 
       // Create order
+      const amountMinorWei = toWei(amount)
+      console.log('Amount in wei:', amountMinorWei)
+      
+      const orderPayload = {
+        merchant_id: merchantData.id,
+        amount_minor: amountMinorWei, // BigNumber string - will be parsed correctly by Go
+        asset: 'USDT',
+        chain: chain,
+        idempotency_key: uuidv4()
+      }
+      console.log('Order payload:', orderPayload)
+      
       const orderRes = await fetch(`${API_BASE}/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-API-Key': merchantData.api_key
         },
-        body: JSON.stringify({
-          merchant_id: merchantData.id,
-          amount_minor: toWei(amount), // Convert to 18 decimals safely
-          asset: 'USDT',
-          chain: chain,
-          idempotency_key: uuidv4()
-        })
+        body: JSON.stringify(orderPayload)
       })
       
       if (!orderRes.ok) {
@@ -128,6 +136,53 @@ export default function RealTest() {
       
     } catch (err) {
       setError(`Setup failed: ${err}`)
+    }
+    setLoading(false)
+  }
+
+  const loadExistingOrder = async () => {
+    if (!existingOrderId.trim() || !existingApiKey.trim()) {
+      setError('Please enter both Order ID and API Key')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      // Create a temporary merchant object for API calls
+      const tempMerchant: Merchant = {
+        id: 'temp',
+        api_key: existingApiKey.trim(),
+        merchant_wallet_address: 'temp'
+      }
+      setMerchant(tempMerchant)
+
+      // Fetch the existing order
+      const orderRes = await fetch(`${API_BASE}/orders/get?id=${existingOrderId.trim()}`, {
+        headers: {
+          'X-API-Key': existingApiKey.trim()
+        }
+      })
+      
+      if (!orderRes.ok) {
+        const errorText = await orderRes.text()
+        throw new Error(`Failed to load order: ${orderRes.status} - ${errorText}`)
+      }
+      
+      const orderData = await orderRes.json()
+      setOrder(orderData)
+      setOrderId(existingOrderId.trim())
+      
+      // If already paid, go to complete
+      if (orderData.status === 'PAID') {
+        setStep('complete')
+      } else {
+        setStep('payment')
+      }
+      
+    } catch (err) {
+      setError(`Failed to load order: ${err}`)
     }
     setLoading(false)
   }
@@ -170,26 +225,32 @@ export default function RealTest() {
       if (!orderId || !merchant) return
       
       try {
+        console.log(`Polling order status for ${orderId}...`)
         const res = await fetch(`${API_BASE}/orders/get?id=${orderId}`, {
           headers: { 'X-API-Key': merchant.api_key }
         })
         
         if (res.ok) {
           const data = await res.json()
+          console.log(`Order status: ${data.status}`)
           setOrder(data)
           
           if (data.status === 'PAID') {
             setStep('complete')
-            if (pollingInterval) clearInterval(pollingInterval)
+            clearInterval(interval)
+            setPollingInterval(null)
             return
           }
           
           // If status is not PENDING or CONFIRMING, something went wrong
           if (data.status !== 'PENDING' && data.status !== 'CONFIRMING') {
             setError(`Payment verification failed. Status: ${data.status}`)
-            if (pollingInterval) clearInterval(pollingInterval)
+            clearInterval(interval)
+            setPollingInterval(null)
             setStep('payment')
           }
+        } else {
+          console.error('Failed to fetch order status:', res.status)
         }
       } catch (err) {
         console.error('Polling error:', err)
@@ -200,7 +261,8 @@ export default function RealTest() {
     
     // Stop polling after 2 minutes
     setTimeout(() => {
-      if (interval) clearInterval(interval)
+      clearInterval(interval)
+      setPollingInterval(null)
       if (step === 'checking') {
         setError('Verification timed out. Please check your transaction manually.')
         setStep('payment')
@@ -209,14 +271,19 @@ export default function RealTest() {
   }
 
   const reset = () => {
-    if (pollingInterval) clearInterval(pollingInterval)
+    if (pollingInterval) {
+      clearInterval(pollingInterval)
+      setPollingInterval(null)
+    }
     setStep('setup')
     setMerchant(null)
     setOrder(null)
     setOrderId('')
     setTxHash('')
     setError('')
-    setPollingInterval(null)
+    setUseExistingOrder(false)
+    setExistingOrderId('')
+    setExistingApiKey('')
   }
 
   const handleChainChange = (newChain: string) => {
@@ -274,120 +341,290 @@ export default function RealTest() {
         <div style={{ padding: 30, background: '#f8f9fa', borderRadius: 12, border: '1px solid #dee2e6' }}>
           <h2 style={{ marginTop: 0, color: '#495057' }}>🛠️ Setup Real Payment Test</h2>
           
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
-              Your Wallet Address (Merchant):
-            </label>
-            <input 
-              value={merchantWallet}
-              onChange={e => setMerchantWallet(e.target.value)}
-              placeholder="0x... (your actual wallet address)"
-              style={{ 
-                width: '100%', 
-                padding: 12, 
-                fontSize: 14, 
-                borderRadius: 6,
-                border: '1px solid #ced4da',
-                fontFamily: 'monospace'
-              }}
-            />
-            <small style={{ color: '#6c757d' }}>
-              This is where you'll receive the payment. Use your real wallet address.
-            </small>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
-                Amount (USDT):
-              </label>
-              <input 
-                type="number"
-                value={amount}
-                onChange={e => setAmount(Number(e.target.value))}
-                style={{ 
-                  width: '100%', 
-                  padding: 12, 
-                  fontSize: 16, 
-                  textAlign: 'center',
-                  borderRadius: 6,
-                  border: '1px solid #ced4da'
-                }}
-                step="0.000001"
-                min="0.000001"
-              />
-            </div>
-            
-            <div>
-              <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
-                Blockchain:
-              </label>
-              <select 
-                value={chain}
-                onChange={e => handleChainChange(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  padding: 12, 
-                  fontSize: 16,
-                  borderRadius: 6,
-                  border: '1px solid #ced4da'
-                }}
-              >
-                <option value="BSC">BSC (BEP-20)</option>
-                <option value="TRC-20">TRC-20 (Tron)</option>
-                <option value="ERC-20">ERC-20 (Ethereum)</option>
-              </select>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
-              Token Contract Address:
-            </label>
-            <input 
-              value={tokenContract}
-              onChange={e => setTokenContract(e.target.value)}
-              placeholder="0x... or TR... (USDT contract address)"
-              style={{ 
-                width: '100%', 
-                padding: 12, 
-                fontSize: 14, 
-                borderRadius: 6,
-                border: '1px solid #ced4da',
-                fontFamily: 'monospace'
-              }}
-            />
-            <small style={{ color: '#6c757d' }}>
-              {chain === 'BSC' && 'BSC-USD: 0x55d398326f99059ff775485246999027b3197955'}
-              {chain === 'TRC-20' && 'TRC-20 USDT: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'}
-              {chain === 'ERC-20' && 'ERC-20 USDT: 0xdAC17F958D2ee523a2206206994597C13D831ec7'}
-            </small>
-          </div>
-          
-          <div style={{ textAlign: 'center' }}>
+          {/* Toggle between new order and existing order */}
+          <div style={{ marginBottom: 25, textAlign: 'center' }}>
             <button 
-              onClick={createMerchantAndOrder}
-              disabled={loading || !merchantWallet.trim()}
+              onClick={() => setUseExistingOrder(false)}
               style={{ 
-                padding: '15px 30px', 
-                background: loading || !merchantWallet.trim() ? '#6c757d' : '#dc3545', 
+                padding: '10px 20px', 
+                background: !useExistingOrder ? '#007bff' : '#6c757d', 
                 color: 'white', 
                 border: 'none', 
-                borderRadius: 8, 
-                cursor: loading || !merchantWallet.trim() ? 'not-allowed' : 'pointer',
-                fontSize: 16,
+                borderRadius: '8px 0 0 8px', 
+                cursor: 'pointer',
+                fontSize: 14,
                 fontWeight: 'bold'
               }}
             >
-              {loading ? '⏳ Setting up...' : '🚀 Create Real Payment Request'}
+              Create New Order
+            </button>
+            <button 
+              onClick={() => setUseExistingOrder(true)}
+              style={{ 
+                padding: '10px 20px', 
+                background: useExistingOrder ? '#007bff' : '#6c757d', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: '0 8px 8px 0', 
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 'bold'
+              }}
+            >
+              Use Existing Order
             </button>
           </div>
+
+          {!useExistingOrder ? (
+            /* New Order Form */
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                  Your Wallet Address (Merchant):
+                </label>
+                <input 
+                  value={merchantWallet}
+                  onChange={e => setMerchantWallet(e.target.value)}
+                  placeholder="0x... (your actual wallet address)"
+                  style={{ 
+                    width: '100%', 
+                    padding: 12, 
+                    fontSize: 14, 
+                    borderRadius: 6,
+                    border: '1px solid #ced4da',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <small style={{ color: '#6c757d' }}>
+                  This is where you'll receive the payment. Use your real wallet address.
+                </small>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                    Amount (USDT):
+                  </label>
+                  <input 
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(Number(e.target.value))}
+                    style={{ 
+                      width: '100%', 
+                      padding: 12, 
+                      fontSize: 16, 
+                      textAlign: 'center',
+                      borderRadius: 6,
+                      border: '1px solid #ced4da'
+                    }}
+                    step="0.000001"
+                    min="0.000001"
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                    Blockchain:
+                  </label>
+                  <select 
+                    value={chain}
+                    onChange={e => handleChainChange(e.target.value)}
+                    style={{ 
+                      width: '100%', 
+                      padding: 12, 
+                      fontSize: 16,
+                      borderRadius: 6,
+                      border: '1px solid #ced4da'
+                    }}
+                  >
+                    <option value="BSC">BSC (BEP-20)</option>
+                    <option value="TRC-20">TRC-20 (Tron)</option>
+                    <option value="ERC-20">ERC-20 (Ethereum)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                  Token Contract Address:
+                </label>
+                <input 
+                  value={tokenContract}
+                  onChange={e => setTokenContract(e.target.value)}
+                  placeholder="0x... or TR... (USDT contract address)"
+                  style={{ 
+                    width: '100%', 
+                    padding: 12, 
+                    fontSize: 14, 
+                    borderRadius: 6,
+                    border: '1px solid #ced4da',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <small style={{ color: '#6c757d' }}>
+                  {chain === 'BSC' && 'BSC-USD: 0x55d398326f99059ff775485246999027b3197955'}
+                  {chain === 'TRC-20' && 'TRC-20 USDT: TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t'}
+                  {chain === 'ERC-20' && 'ERC-20 USDT: 0xdAC17F958D2ee523a2206206994597C13D831ec7'}
+                </small>
+              </div>
+              
+              <div style={{ textAlign: 'center' }}>
+                <button 
+                  onClick={createMerchantAndOrder}
+                  disabled={loading || !merchantWallet.trim()}
+                  style={{ 
+                    padding: '15px 30px', 
+                    background: loading || !merchantWallet.trim() ? '#6c757d' : '#dc3545', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: 8, 
+                    cursor: loading || !merchantWallet.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {loading ? '⏳ Setting up...' : '🚀 Create Real Payment Request'}
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Existing Order Form */
+            <>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                  Order ID:
+                </label>
+                <input 
+                  value={existingOrderId}
+                  onChange={e => setExistingOrderId(e.target.value)}
+                  placeholder="773a946e-9421-4db9-9385-02dc5ac70229"
+                  style={{ 
+                    width: '100%', 
+                    padding: 12, 
+                    fontSize: 14, 
+                    borderRadius: 6,
+                    border: '1px solid #ced4da',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <small style={{ color: '#6c757d' }}>
+                  Enter the order ID from a previous order
+                </small>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#495057' }}>
+                  API Key:
+                </label>
+                <input 
+                  value={existingApiKey}
+                  onChange={e => setExistingApiKey(e.target.value)}
+                  placeholder="8a1bf07c-9566-477c-9401-717dd12e2752"
+                  style={{ 
+                    width: '100%', 
+                    padding: 12, 
+                    fontSize: 14, 
+                    borderRadius: 6,
+                    border: '1px solid #ced4da',
+                    fontFamily: 'monospace'
+                  }}
+                />
+                <small style={{ color: '#6c757d' }}>
+                  Enter the API key for the merchant that owns this order
+                </small>
+              </div>
+              
+              <div style={{ textAlign: 'center' }}>
+                <button 
+                  onClick={loadExistingOrder}
+                  disabled={loading || !existingOrderId.trim() || !existingApiKey.trim()}
+                  style={{ 
+                    padding: '15px 30px', 
+                    background: loading || !existingOrderId.trim() || !existingApiKey.trim() ? '#6c757d' : '#28a745', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: 8, 
+                    cursor: loading || !existingOrderId.trim() || !existingApiKey.trim() ? 'not-allowed' : 'pointer',
+                    fontSize: 16,
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {loading ? '⏳ Loading...' : '📋 Load Existing Order'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* Payment */}
       {step === 'payment' && order && merchant && (
         <div>
+          {/* Prominent Order ID Display */}
+          <div style={{ 
+            background: '#e3f2fd', 
+            padding: 20, 
+            borderRadius: 12, 
+            marginBottom: 20, 
+            border: '2px solid #2196f3',
+            textAlign: 'center'
+          }}>
+            <h3 style={{ margin: 0, color: '#1976d2' }}>🆔 Order ID</h3>
+            <div style={{ 
+              fontFamily: 'monospace', 
+              fontSize: 16, 
+              fontWeight: 'bold',
+              color: '#1976d2',
+              marginTop: 8,
+              wordBreak: 'break-all'
+            }}>
+              {orderId}
+            </div>
+            <button 
+              onClick={() => copyToClipboard(orderId)}
+              style={{ 
+                marginTop: 10,
+                padding: '6px 12px', 
+                background: '#2196f3', 
+                color: 'white', 
+                border: 'none', 
+                borderRadius: 4, 
+                fontSize: 12,
+                cursor: 'pointer'
+              }}
+            >
+              📋 Copy Order ID
+            </button>
+            {merchant.api_key && (
+              <div style={{ marginTop: 15 }}>
+                <div style={{ fontSize: 14, color: '#1976d2', marginBottom: 5 }}>API Key:</div>
+                <div style={{ 
+                  fontFamily: 'monospace', 
+                  fontSize: 12, 
+                  color: '#666',
+                  wordBreak: 'break-all'
+                }}>
+                  {merchant.api_key}
+                </div>
+                <button 
+                  onClick={() => copyToClipboard(merchant.api_key)}
+                  style={{ 
+                    marginTop: 5,
+                    padding: '4px 8px', 
+                    background: '#666', 
+                    color: 'white', 
+                    border: 'none', 
+                    borderRadius: 4, 
+                    fontSize: 10,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📋 Copy API Key
+                </button>
+              </div>
+            )}
+          </div>
+
           <div style={{ textAlign: 'center', marginBottom: 30 }}>
             <h2 style={{ color: '#495057' }}>💰 Send Real Payment</h2>
             <div style={{ 
