@@ -135,7 +135,6 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// enqueue background verification job and return 202 quickly
 	if verifyJobs != nil {
 		// Load merchant_id for the job (needed by worker)
 		var merchantID string
@@ -174,7 +173,6 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 		_ = tx.Rollback() // safe if already committed
 	}()
 
-	// 1) load order (FOR UPDATE isn’t in SQLite; we keep it simple)
 	var (
 		merchantID  string
 		amountMinor int64
@@ -207,11 +205,8 @@ func PaymentDetectedHandler(w http.ResponseWriter, r *http.Request) {
 	if strings.ToUpper(asset) == "USDT" && strings.Contains(strings.ToLower(asset+"-bsc"), "bsc") {
 		verifySem <- struct{}{}
 		defer func() { <-verifySem }()
-		// Convert from 6 decimals (database) to 18 decimals (BSC-USD contract)
-		// amountMinor is stored as 6-decimal (e.g., 10 USDT = 10000000)
-		// BSC-USD contract expects 18-decimal (e.g., 10 BSC-USD = 10000000000000000000)
 		expectedAmount := big.NewInt(amountMinor)
-		multiplier := big.NewInt(1000000000000) // 10^12 to convert from 6 to 18 decimals
+		multiplier := big.NewInt(1000000000000)
 		expectedAmount.Mul(expectedAmount, multiplier)
 
 		log.Printf("BSC verification: converting amount from %d (6-decimal) to %s (18-decimal)", amountMinor, expectedAmount.String())
@@ -428,9 +423,8 @@ func processVerificationJob(job verifyJob) {
 	if strings.ToUpper(asset) == "USDT" && strings.ToUpper(chain) == "BSC" {
 		log.Printf("Starting BSC-USD verification for order %s, tx %s", job.OrderID, job.TxHash)
 		verifySem <- struct{}{}
-		// Convert from 6 decimals (database) to 18 decimals (BSC-USD contract)
 		expected := big.NewInt(amountMinor)
-		multiplier := big.NewInt(1000000000000) // 10^12 to convert from 6 to 18 decimals
+		multiplier := big.NewInt(1000000000000)
 		expected.Mul(expected, multiplier)
 
 		log.Printf("BSC verification: converting amount from %d (6-decimal) to %s (18-decimal)", amountMinor, expected.String())
@@ -443,11 +437,8 @@ func processVerificationJob(job verifyJob) {
 		}
 		log.Printf("BSC verification passed for order %s", job.OrderID)
 	} else if strings.ToUpper(asset) == "USDT" {
-		// For USDT on non-BSC chains (TRC-20, etc.), skip blockchain verification
-		// In production, you would implement chain-specific verification here
 		log.Printf("Skipping blockchain verification for USDT on %s chain (order %s) - auto-approving for testing", chain, job.OrderID)
 	} else {
-		// For non-USDT assets, auto-approve for testing
 		log.Printf("Skipping blockchain verification for %s asset (order %s) - auto-approving for testing", asset, job.OrderID)
 	}
 
