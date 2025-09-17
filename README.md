@@ -32,7 +32,7 @@ ONLY FOR EDUCATIONAL AND LEARNING PURPOSES,TRYING TO GET FINTECH RECRUITERS TO N
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/crypto-payment-processor.git
+   git clone https://github.com/oxzoid/crypto-payment-processor.git
    cd crypto-payment-processor
    ```
 
